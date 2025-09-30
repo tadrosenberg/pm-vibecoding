@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excuse Email Draft Tool</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const ExcuseGenerator = () => {
+            // Form state
+            const [formData, setFormData] = useState({
+                category: 'Running Late',
+                tone: 'Sincere',
+                seriousness: 3,
+                recipient_name: '',
+                sender_name: '',
+                eta_when: ''
+            });
+
+            // UI state
+            const [isLoading, setIsLoading] = useState(false);
+            const [generatedEmail, setGeneratedEmail] = useState(null);
+            const [error, setError] = useState(null);
+            const [copySuccess, setCopySuccess] = useState(false);
+
+            // Categories and tones
+            const categories = [
+                'Running Late',
+                'Missed Meeting',
+                'Deadline',
+                'WFH/OOO',
+                'Social',
+                'Travel'
+            ];
+
+            const tones = [
+                'Sincere',
+                'Playful',
+                'Corporate'
+            ];
+
+            // Handle form input changes
+            const handleInputChange = (field, value) => {
+                setFormData(prev => ({
+                    ...prev,
+                    [field]: value
+                }));
+                setError(null);
+            };
+
+            // Generate excuse email
+            const generateExcuse = async () => {
+                // Validate required fields
+                if (!formData.recipient_name.trim() || !formData.sender_name.trim() || !formData.eta_when.trim()) {
+                    setError('Please fill in all required fields');
+                    return;
+                }
+
+                setIsLoading(true);
+                setError(null);
+                setGeneratedEmail(null);
+
+                try {
+                    const response = await fetch('/api/generate-excuse', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(formData)
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.detail || 'Failed to generate excuse');
+                    }
+
+                    if (data.success) {
+                        setGeneratedEmail(data);
+                    } else {
+                        throw new Error(data.error || 'Failed to generate excuse');
+                    }
+                } catch (err) {
+                    setError(err.message || 'An error occurred while generating the excuse');
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            // Clear form and output
+            const clearAll = () => {
+                setFormData({
+                    category: 'Running Late',
+                    tone: 'Sincere',
+                    seriousness: 3,
+                    recipient_name: '',
+                    sender_name: '',
+                    eta_when: ''
+                });
+                setGeneratedEmail(null);
+                setError(null);
+                setCopySuccess(false);
+            };
+
+            // Copy to clipboard
+            const copyToClipboard = async () => {
+                if (!generatedEmail) return;
+
+                const emailText = `Subject: ${generatedEmail.subject}\n\n${generatedEmail.body}`;
+                
+                try {
+                    await navigator.clipboard.writeText(emailText);
+                    setCopySuccess(true);
+                    setTimeout(() => setCopySuccess(false), 2000);
+                } catch (err) {
+                    // Fallback for older browsers
+                    const textArea = document.createElement('textarea');
+                    textArea.value = emailText;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    setCopySuccess(true);
+                    setTimeout(() => setCopySuccess(false), 2000);
+                }
+            };
+
+            // Render seriousness slider with visual indicators
+            const renderSeriousnessSlider = () => {
+                const indicators = ['😄', '🙂', '😐', '😔', '😟'];
+                return (
+                    <div className="space-y-2">
+                        <label className="block text-sm font-medium text-gray-700">
+                            Seriousness Level: {formData.seriousness}/5
+                        </label>
+                        <div className="flex items-center space-x-2">
+                            <span className="text-sm text-gray-500">Silly</span>
+                            <input
+                                type="range"
+                                min="1"
+                                max="5"
+                                value={formData.seriousness}
+                                onChange={(e) => handleInputChange('seriousness', parseInt(e.target.value))}
+                                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                            />
+                            <span className="text-sm text-gray-500">Serious</span>
+                        </div>
+                        <div className="flex justify-between text-xs text-gray-400">
+                            {indicators.map((emoji, index) => (
+                                <span key={index} className={`${formData.seriousness === index + 1 ? 'text-primary-600' : ''}`}>
+                                    {emoji}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                );
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    {/* Header */}
+                    <header className="bg-white shadow-sm border-b">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                            <div className="text-center">
+                                <h1 className="text-3xl font-bold text-gray-900">
+                                    Excuse Email Draft Tool
+                                </h1>
+                                <p className="mt-2 text-lg text-gray-600">
+                                    Powered by Databricks Model Serving LLM
+                                </p>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Main Content */}
+                    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            {/* Form Card */}
+                            <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
+                                <h2 className="text-xl font-semibold text-gray-900 mb-6">
+                                    Email Configuration
+                                </h2>
+                                
+                                <div className="space-y-6">
+                                    {/* Category Dropdown */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Category
+                                        </label>
+                                        <select
+                                            value={formData.category}
+                                            onChange={(e) => handleInputChange('category', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                                        >
+                                            {categories.map(category => (
+                                                <option key={category} value={category}>
+                                                    {category}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* Tone Dropdown */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Tone
+                                        </label>
+                                        <select
+                                            value={formData.tone}
+                                            onChange={(e) => handleInputChange('tone', e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                                        >
+                                            {tones.map(tone => (
+                                                <option key={tone} value={tone}>
+                                                    {tone}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* Seriousness Slider */}
+                                    {renderSeriousnessSlider()}
+
+                                    {/* Recipient Name */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Recipient Name *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.recipient_name}
+                                            onChange={(e) => handleInputChange('recipient_name', e.target.value)}
+                                            placeholder="Enter recipient's name"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                                            required
+                                        />
+                                    </div>
+
+                                    {/* Sender Name */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Sender Name *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.sender_name}
+                                            onChange={(e) => handleInputChange('sender_name', e.target.value)}
+                                            placeholder="Enter your name"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                                            required
+                                        />
+                                    </div>
+
+                                    {/* ETA/When */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            ETA/When *
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={formData.eta_when}
+                                            onChange={(e) => handleInputChange('eta_when', e.target.value)}
+                                            placeholder="e.g., 15 minutes, tomorrow morning, next week"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                                            required
+                                        />
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex space-x-3 pt-4">
+                                        <button
+                                            onClick={generateExcuse}
+                                            disabled={isLoading}
+                                            className="flex-1 bg-primary-600 text-white px-4 py-2 rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                            {isLoading ? (
+                                                <span className="flex items-center justify-center">
+                                                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                    Generating...
+                                                </span>
+                                            ) : (
+                                                'Generate Email'
+                                            )}
+                                        </button>
+                                        <button
+                                            onClick={clearAll}
+                                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 transition-colors"
+                                        >
+                                            Clear
+                                        </button>
+                                    </div>
+
+                                    {/* Error Display */}
+                                    {error && (
+                                        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                                            <div className="flex">
+                                                <div className="flex-shrink-0">
+                                                    <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                                    </svg>
+                                                </div>
+                                                <div className="ml-3">
+                                                    <p className="text-sm text-red-800">{error}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Output Card */}
+                            <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
+                                <h2 className="text-xl font-semibold text-gray-900 mb-6">
+                                    Generated Email
+                                </h2>
+                                
+                                {!generatedEmail && !isLoading ? (
+                                    <div className="flex items-center justify-center h-64 text-gray-500">
+                                        <div className="text-center">
+                                            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                            </svg>
+                                            <p className="mt-2 text-sm">Your excuse email will appear here…</p>
+                                        </div>
+                                    </div>
+                                ) : isLoading ? (
+                                    <div className="flex items-center justify-center h-64">
+                                        <div className="text-center">
+                                            <svg className="animate-spin mx-auto h-12 w-12 text-primary-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            <p className="mt-4 text-sm text-gray-600">Generating your email...</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {/* Subject Line */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Subject
+                                            </label>
+                                            <div className="p-3 bg-gray-50 border border-gray-200 rounded-md">
+                                                <p className="font-semibold text-gray-900">{generatedEmail.subject}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Email Body */}
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Email Body
+                                            </label>
+                                            <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+                                                <pre className="whitespace-pre-wrap text-sm text-gray-900 font-sans">
+                                                    {generatedEmail.body}
+                                                </pre>
+                                            </div>
+                                        </div>
+
+                                        {/* Copy Button */}
+                                        <button
+                                            onClick={copyToClipboard}
+                                            className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors"
+                                        >
+                                            {copySuccess ? (
+                                                <span className="flex items-center justify-center">
+                                                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                    Copied to Clipboard!
+                                                </span>
+                                            ) : (
+                                                <span className="flex items-center justify-center">
+                                                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                    </svg>
+                                                    Copy to Clipboard
+                                                </span>
+                                            )}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        // Render the app
+        ReactDOM.render(<ExcuseGenerator />, document.getElementById('root'));
+    </script>
+
+    <style>
+        /* Custom slider styles */
+        .slider::-webkit-slider-thumb {
+            appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            border: 2px solid #ffffff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .slider::-moz-range-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            border: 2px solid #ffffff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</body>
+</html>
